@@ -13,9 +13,12 @@
       margin: 0;
       background: #111;
       display: flex;
+      flex-direction: column;
       justify-content: center;
       align-items: center;
-      height: 100vh;
+      min-height: 100vh;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      gap: 20px;
     }
 
     .video-wrapper {
@@ -23,7 +26,6 @@
       width: 100%;
       max-width: 860px;
       border-radius: 16px;
-      
     }
 
     video {
@@ -46,13 +48,119 @@
       transform: scale(1.05);
       pointer-events: none;
       border-radius: 16px;
+      opacity: 0.8;
+      transition: opacity 0.3s ease;
     }
-    #ambientCanvas{
-    opacity: 0.8;
+
+    canvas.disabled {
+      opacity: 0;
+    }
+
+    /* Toggle Switch Styling */
+    .toggle-container {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      color: white;
+      font-size: 16px;
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 60px;
+      height: 30px;
+      background: #333;
+      border-radius: 30px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      border: 2px solid #444;
+    }
+
+    .toggle-switch.active {
+      background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+      border-color: #4ecdc4;
+      box-shadow: 0 0 20px rgba(78, 205, 196, 0.3);
+    }
+
+    .toggle-slider {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 22px;
+      height: 22px;
+      background: white;
+      border-radius: 50%;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+
+    .toggle-switch.active .toggle-slider {
+      transform: translateX(28px);
+      box-shadow: 0 2px 8px rgba(78, 205, 196, 0.4);
+    }
+
+    .toggle-label {
+      font-weight: 600;
+      user-select: none;
+    }
+
+    /* Status indicator */
+    .status-indicator {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #666;
+      margin-left: 10px;
+      transition: all 0.3s ease;
+    }
+
+    .status-indicator.active {
+      background: #4ecdc4;
+      box-shadow: 0 0 10px rgba(78, 205, 196, 0.6);
+    }
+
+    /* Hover effects */
+    .toggle-switch:hover {
+      transform: scale(1.05);
+    }
+
+    .toggle-switch:active {
+      transform: scale(0.95);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .toggle-container {
+        font-size: 14px;
+      }
+      
+      .toggle-switch {
+        width: 50px;
+        height: 25px;
+      }
+      
+      .toggle-slider {
+        width: 19px;
+        height: 19px;
+      }
+      
+      .toggle-switch.active .toggle-slider {
+        transform: translateX(23px);
+      }
     }
   </style>
 </head>
 <body>
+
+  <!-- Toggle Control -->
+  <div class="toggle-container">
+    <span class="toggle-label">Ambient Glow</span>
+    <div class="toggle-switch active" id="ambientToggle">
+      <div class="toggle-slider"></div>
+    </div>
+    <span class="status-indicator active" id="statusIndicator"></span>
+  </div>
 
   <div class="video-wrapper">
     <canvas id="ambientCanvas"></canvas>
@@ -66,25 +174,82 @@
     const video = document.getElementById("mainVideo");
     const canvas = document.getElementById("ambientCanvas");
     const ctx = canvas.getContext("2d");
+    const toggle = document.getElementById("ambientToggle");
+    const statusIndicator = document.getElementById("statusIndicator");
+    
+    let animationId;
+    let isAmbientEnabled = true;
 
     function resizeCanvas() {
       canvas.width = video.clientWidth;
       canvas.height = video.clientHeight;
     }
 
+    function drawAmbient() {
+      if (!video.paused && !video.ended && video.readyState >= 2 && isAmbientEnabled) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      }
+      animationId = requestAnimationFrame(drawAmbient);
+    }
+
+    function startAmbient() {
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+      }
+      resizeCanvas();
+      drawAmbient();
+    }
+
+    function stopAmbient() {
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+      }
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function toggleAmbient() {
+      isAmbientEnabled = !isAmbientEnabled;
+      
+      // Update UI
+      toggle.classList.toggle('active', isAmbientEnabled);
+      statusIndicator.classList.toggle('active', isAmbientEnabled);
+      canvas.classList.toggle('disabled', !isAmbientEnabled);
+      
+      if (isAmbientEnabled) {
+        // Turn ON: Start ambient if video is playing
+        if (!video.paused && !video.ended) {
+          startAmbient();
+        }
+      } else {
+        // Turn OFF: Stop ambient and clear canvas
+        stopAmbient();
+      }
+    }
+
+    // Event Listeners
     window.addEventListener("resize", resizeCanvas);
     video.addEventListener("loadeddata", resizeCanvas);
 
-    function drawAmbient() {
-      if (!video.paused && !video.ended) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      }
-      requestAnimationFrame(drawAmbient);
-    }
-
     video.addEventListener("play", () => {
-      resizeCanvas();
-      drawAmbient();
+      if (isAmbientEnabled) {
+        startAmbient();
+      }
+    });
+
+    video.addEventListener("pause", () => {
+      stopAmbient();
+    });
+
+    // Toggle switch click listener
+    toggle.addEventListener("click", toggleAmbient);
+
+    // Keyboard shortcut 
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "a" || e.key === "A") {
+        toggleAmbient();
+      }
     });
   </script>
 
